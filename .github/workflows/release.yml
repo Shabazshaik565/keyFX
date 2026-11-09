@@ -84,24 +84,27 @@ jobs:
           $tempDir = "$env:RUNNER_TEMP\portable"
           New-Item -ItemType Directory -Force -Path $tempDir
           Copy-Item "src-tauri\target\release\keyfx.exe" "$tempDir\KeyFX.exe" -Force
-          @"
-===================================================================
- KeyFX v$version - Portable Edition
- Native Windows Mechanical Keyboard Sound Simulator
-===================================================================
-
-HOW TO RUN:
-1. Double-click 'KeyFX.exe' to launch.
-2. No installation required. You can run this from any folder or USB drive.
-3. KeyFX runs in the background and appears in your Windows system tray.
-
-SYSTEM REQUIREMENTS:
-- Windows 10 (version 1809+) or Windows 11 (64-bit)
-- Microsoft Edge WebView2 Runtime (pre-installed on Windows 10/11)
-
-DOCUMENTATION & SOURCE CODE:
-https://github.com/Shabazshaik565/keyFX
-"@ | Set-Content -Path "$tempDir\README.txt"
+          
+          $readme = @(
+            "===================================================================",
+            " KeyFX v$version - Portable Edition",
+            " Native Windows Mechanical Keyboard Sound & Real Piano Simulator",
+            "===================================================================",
+            "",
+            "HOW TO RUN:",
+            "1. Double-click 'KeyFX.exe' to launch.",
+            "2. No installation required. You can run this from any folder or USB drive.",
+            "3. KeyFX runs in the background and appears in your Windows system tray.",
+            "",
+            "SYSTEM REQUIREMENTS:",
+            "- Windows 10 (version 1809+) or Windows 11 (64-bit)",
+            "- Microsoft Edge WebView2 Runtime (pre-installed on Windows 10/11)",
+            "",
+            "DOCUMENTATION & SOURCE CODE:",
+            "https://github.com/Shabazshaik565/keyFX"
+          ) -join "`r`n"
+          $readme | Set-Content -Path "$tempDir\README.txt" -Encoding UTF8
+          
           Compress-Archive -Path "$tempDir\*" -DestinationPath "dist-release\KeyFX-Portable-v$version.zip" -Force
           Remove-Item -Recurse -Force $tempDir
           
@@ -112,8 +115,7 @@ https://github.com/Shabazshaik565/keyFX
 
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        if: startsWith(github.ref, 'refs/tags/v')
         with:
           name: KeyFX ${{ github.ref_name }}
           draft: false
