@@ -252,7 +252,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
         {/* Modal Footer */}
         <div className="px-6 py-4 border-t border-white/10 bg-background/50 flex items-center justify-between">
-          <span className="text-xs font-mono text-slate-400">KeyFX v1.0.0 (Windows Native)</span>
+          <span className="text-xs font-mono text-slate-400">KeyFX v2.0.0 (Windows Native)</span>
           <button
             onClick={onClose}
             className="px-5 py-2.5 rounded-xl bg-neon-cyan hover:bg-cyan-300 text-slate-950 text-xs font-black uppercase tracking-wider transition-all cursor-pointer shadow-glow-cyan/50"

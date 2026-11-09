@@ -270,12 +270,14 @@ pub fn init_audio_engine() {
         };
 
         let engine = AudioEngine {
-            stream_handle,
+            stream_handle: stream_handle.clone(),
             sound_cache,
             settings: Arc::new(RwLock::new(initial_settings)),
         };
 
+        let stream_for_piano = stream_handle.clone();
         let _ = AUDIO_ENGINE.set(RwLock::new(engine));
+        crate::piano_audio::init_piano_engine(stream_for_piano);
         println!("[KeyFX Audio] Local low-latency audio engine initialized.");
 
         // Immediately load and register all saved custom sounds into the audio engine cache
@@ -290,7 +292,8 @@ pub fn init_audio_engine() {
                         _current_stream = Some(new_stream);
                         if let Some(engine_lock) = AUDIO_ENGINE.get() {
                             if let Ok(mut engine) = engine_lock.write() {
-                                engine.stream_handle = new_handle;
+                                engine.stream_handle = new_handle.clone();
+                                crate::piano_audio::update_stream_handle(new_handle);
                             }
                         }
                         println!("[KeyFX Audio] Successfully switched audio output to: {}", device_name);

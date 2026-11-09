@@ -67,7 +67,7 @@ jobs:
         run: |
           $version = "${{ github.ref_name }}"
           if ($version.StartsWith("v")) { $version = $version.Substring(1) }
-          if ([string]::IsNullOrWhiteSpace($version) -or $version -eq "main") { $version = "1.0.0" }
+          if ([string]::IsNullOrWhiteSpace($version) -or $version -eq "main") { $version = "2.0.0" }
           
           New-Item -ItemType Directory -Force -Path "dist-release"
           

@@ -2,6 +2,7 @@ pub mod audio;
 pub mod autostart;
 pub mod custom_sounds;
 pub mod keyboard;
+pub mod piano_audio;
 pub mod settings;
 pub mod tray;
 
@@ -28,6 +29,96 @@ fn toggle_active_state(is_enabled: bool) -> Result<bool, String> {
         config.selected_sound_id,
     );
     Ok(is_enabled)
+}
+
+#[tauri::command]
+fn set_app_mode(mode: String) -> Result<String, String> {
+    keyboard::set_mode(mode.clone());
+    let mut config = settings::load_config();
+    config.mode = mode.clone();
+    let _ = settings::save_config(&config);
+    Ok(mode)
+}
+
+#[tauri::command]
+fn sync_piano_settings(
+    volume: f32,
+    octave: i32,
+    sustain: bool,
+    preset: String,
+) -> Result<(), String> {
+    piano_audio::update_piano_settings(volume, octave, sustain, preset.clone());
+    keyboard::update_piano_octave(octave);
+
+    let mut config = settings::load_config();
+    config.piano_volume = volume;
+    config.piano_octave = octave;
+    config.piano_sustain = sustain;
+    config.piano_preset = preset;
+    let _ = settings::save_config(&config);
+    Ok(())
+}
+
+#[tauri::command]
+fn set_piano_sustain(sustain: bool) -> Result<bool, String> {
+    piano_audio::set_piano_sustain(sustain);
+    keyboard::update_piano_sustain(sustain);
+    let mut config = settings::load_config();
+    config.piano_sustain = sustain;
+    let _ = settings::save_config(&config);
+    Ok(sustain)
+}
+
+#[tauri::command]
+fn set_piano_octave(octave: i32) -> Result<i32, String> {
+    let clamped = octave.clamp(1, 7);
+    piano_audio::set_piano_octave(clamped);
+    keyboard::update_piano_octave(clamped);
+    let mut config = settings::load_config();
+    config.piano_octave = clamped;
+    let _ = settings::save_config(&config);
+    Ok(clamped)
+}
+
+#[tauri::command]
+fn set_piano_preset(preset: String) -> Result<String, String> {
+    piano_audio::set_piano_preset(&preset);
+    let mut config = settings::load_config();
+    config.piano_preset = preset.clone();
+    let _ = settings::save_config(&config);
+    Ok(preset)
+}
+
+#[tauri::command]
+fn preview_piano_preset(preset: String) -> Result<String, String> {
+    piano_audio::preview_preset_sound(&preset);
+    let mut config = settings::load_config();
+    config.piano_preset = preset.clone();
+    let _ = settings::save_config(&config);
+    Ok(preset)
+}
+
+#[tauri::command]
+fn trigger_piano_note_on(
+    vk: u32,
+    note_name: String,
+    octave: Option<i32>,
+    velocity: Option<f32>,
+) -> Result<(), String> {
+    piano_audio::play_piano_note_on(vk, &note_name, octave, velocity.unwrap_or(1.0));
+    Ok(())
+}
+
+#[tauri::command]
+fn trigger_piano_note_off(vk: u32) -> Result<(), String> {
+    piano_audio::play_piano_note_off(vk);
+    Ok(())
+}
+
+#[tauri::command]
+fn stop_all_piano_notes() -> Result<(), String> {
+    piano_audio::stop_all_piano_notes();
+    Ok(())
 }
 
 #[tauri::command]
@@ -80,7 +171,6 @@ fn sync_audio_tuning(
     );
     Ok(())
 }
-
 
 #[tauri::command]
 fn preview_sound(sound_id: String) -> Result<(), String> {
@@ -171,6 +261,15 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             get_app_status,
             toggle_active_state,
+            set_app_mode,
+            sync_piano_settings,
+            set_piano_sustain,
+            set_piano_octave,
+            set_piano_preset,
+            preview_piano_preset,
+            trigger_piano_note_on,
+            trigger_piano_note_off,
+            stop_all_piano_notes,
             set_keyboard_scope,
             set_cooldown_ms,
             sync_audio_tuning,
@@ -189,6 +288,3 @@ pub fn run() {
         .run(tauri::generate_context!())
         .expect("error while running KeyFX tauri application");
 }
-
-
-

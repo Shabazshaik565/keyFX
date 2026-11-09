@@ -5,8 +5,9 @@ import { SoundLibrary } from './components/SoundLibrary';
 import { SoundTuning } from './components/SoundTuning';
 import { KeyboardScopeSelector } from './components/KeyboardScope';
 import { KeyVisualizer } from './components/KeyVisualizer';
+import { PianoView } from './components/PianoView';
 import { SettingsModal } from './components/SettingsModal';
-import { AppSettings, SoundProfile } from './types';
+import { AppMode, AppSettings, SoundProfile, PianoNoteEvent } from './types';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { Sparkles, AlertCircle } from 'lucide-react';
@@ -72,6 +73,7 @@ const INITIAL_SOUNDS: SoundProfile[] = [
 
 const DEFAULT_SETTINGS: AppSettings = {
   isEnabled: true,
+  mode: 'normal',
   selectedSoundId: 'mech_cherry_blue',
   volume: 85,
   pitch: 0,
@@ -83,12 +85,16 @@ const DEFAULT_SETTINGS: AppSettings = {
   startWithWindows: false,
   minimizeToTray: true,
   muteWhenFullscreen: false,
+  pianoVolume: 85,
+  pianoOctave: 4,
+  pianoSustain: false,
+  pianoPreset: 'grand_piano',
 };
 
 export function App() {
   const [settings, setSettings] = useState<AppSettings>(() => {
     const saved = localStorage.getItem('keyfx_settings');
-    return saved ? JSON.parse(saved) : DEFAULT_SETTINGS;
+    return saved ? { ...DEFAULT_SETTINGS, ...JSON.parse(saved) } : DEFAULT_SETTINGS;
   });
 
   const [sounds, setSounds] = useState<SoundProfile[]>(() => {
@@ -103,6 +109,8 @@ export function App() {
   const [isKeyPulsing, setIsKeyPulsing] = useState(false);
   const [liveWpm, setLiveWpm] = useState(0);
   const [totalKeystrokes, setTotalKeystrokes] = useState(0);
+  const [activePianoNotes, setActivePianoNotes] = useState<Set<string>>(new Set());
+  const [livePianoSustain, setLivePianoSustain] = useState<boolean>(settings.pianoSustain);
 
   const strokeTimestampsRef = useRef<number[]>([]);
 
@@ -110,6 +118,7 @@ export function App() {
   useEffect(() => {
     localStorage.setItem('keyfx_settings', JSON.stringify(settings));
     try {
+      invoke('set_app_mode', { mode: settings.mode }).catch(() => {});
       invoke('sync_audio_tuning', {
         isEnabled: settings.isEnabled,
         volume: settings.volume,
@@ -118,6 +127,12 @@ export function App() {
         randomPitch: settings.randomPitch,
         randomVolume: settings.randomVolume,
         selectedSoundId: settings.selectedSoundId,
+      }).catch(() => {});
+      invoke('sync_piano_settings', {
+        volume: settings.pianoVolume,
+        octave: settings.pianoOctave,
+        sustain: settings.pianoSustain,
+        preset: settings.pianoPreset,
       }).catch(() => {});
       invoke('set_keyboard_scope', { scope: settings.keyboardScope }).catch(() => {});
       invoke('set_cooldown_ms', { cooldownMs: settings.cooldownMs }).catch(() => {});
@@ -148,6 +163,7 @@ export function App() {
             ...backendStatus,
           }));
 
+          invoke('set_app_mode', { mode: backendStatus.mode || 'normal' }).catch(() => {});
           invoke('sync_audio_tuning', {
             isEnabled: backendStatus.isEnabled,
             volume: backendStatus.volume,
@@ -157,6 +173,12 @@ export function App() {
             randomVolume: backendStatus.randomVolume,
             selectedSoundId: backendStatus.selectedSoundId,
           }).catch(() => {});
+          invoke('sync_piano_settings', {
+            volume: backendStatus.pianoVolume ?? 85,
+            octave: backendStatus.pianoOctave ?? 4,
+            sustain: backendStatus.pianoSustain ?? false,
+            preset: backendStatus.pianoPreset ?? 'grand_piano',
+          }).catch(() => {});
         }
       } catch (err) {
         console.warn('Failed to initialize app from backend:', err);
@@ -165,10 +187,14 @@ export function App() {
     initApp();
   }, []);
 
-  // Listen for system-wide Windows keystroke & Tray events
+  // Listen for system-wide Windows keystroke, Piano & Tray events
   useEffect(() => {
     let unlistenKeystroke: (() => void) | undefined;
     let unlistenTrayToggle: (() => void) | undefined;
+    let unlistenPianoNoteOn: (() => void) | undefined;
+    let unlistenPianoNoteOff: (() => void) | undefined;
+    let unlistenPianoOctave: (() => void) | undefined;
+    let unlistenPianoSustain: (() => void) | undefined;
 
     const setupListeners = async () => {
       try {
@@ -183,8 +209,33 @@ export function App() {
           strokeTimestampsRef.current.push(now);
           strokeTimestampsRef.current = strokeTimestampsRef.current.filter((t) => now - t <= 5000);
           const charsInWindow = strokeTimestampsRef.current.length;
-          const calculatedWpm = Math.round((charsInWindow / 5) * 12); // Standard WPM approximation
+          const calculatedWpm = Math.round((charsInWindow / 5) * 12);
           setLiveWpm(calculatedWpm);
+        });
+
+        unlistenPianoNoteOn = await listen<PianoNoteEvent>('keyfx://piano-note-on', (event) => {
+          setActivePianoNotes((prev) => new Set(prev).add(event.payload.note_full));
+          setTotalKeystrokes((c) => c + 1);
+        });
+
+        unlistenPianoNoteOff = await listen<{ vk_code: number; note_full?: string }>('keyfx://piano-note-off', (event) => {
+          if (event.payload.note_full) {
+            const noteToRemove = event.payload.note_full;
+            setActivePianoNotes((prev) => {
+              const next = new Set(prev);
+              next.delete(noteToRemove);
+              return next;
+            });
+          }
+        });
+
+        unlistenPianoOctave = await listen<number>('keyfx://piano-octave-changed', (event) => {
+          setSettings((prev) => ({ ...prev, pianoOctave: event.payload }));
+          showToast(`Octave shifted to C${event.payload}`, 'info');
+        });
+
+        unlistenPianoSustain = await listen<boolean>('keyfx://piano-sustain-changed', (event) => {
+          setLivePianoSustain(event.payload);
         });
 
         unlistenTrayToggle = await listen<boolean>('keyfx://tray-toggle-enabled', (event) => {
@@ -216,6 +267,10 @@ export function App() {
 
     return () => {
       if (unlistenKeystroke) unlistenKeystroke();
+      if (unlistenPianoNoteOn) unlistenPianoNoteOn();
+      if (unlistenPianoNoteOff) unlistenPianoNoteOff();
+      if (unlistenPianoOctave) unlistenPianoOctave();
+      if (unlistenPianoSustain) unlistenPianoSustain();
       if (unlistenTrayToggle) unlistenTrayToggle();
       clearInterval(interval);
     };
@@ -228,6 +283,24 @@ export function App() {
 
   const updateSettings = (updated: Partial<AppSettings>) => {
     setSettings((prev) => ({ ...prev, ...updated }));
+    if (updated.pianoSustain !== undefined) {
+      setLivePianoSustain(updated.pianoSustain);
+    }
+  };
+
+  const handleModeChange = (newMode: AppMode) => {
+    setActivePianoNotes(new Set());
+    updateSettings({ mode: newMode });
+    try {
+      invoke('set_app_mode', { mode: newMode }).catch(() => {});
+      invoke('stop_all_piano_notes').catch(() => {});
+    } catch {}
+    showToast(
+      newMode === 'piano'
+        ? 'Switched to Real Piano Mode 🎹'
+        : 'Switched to Normal Mode ⌨️',
+      'success'
+    );
   };
 
   // Play sound via native Rust audio engine
@@ -283,16 +356,30 @@ export function App() {
     <div className="min-h-screen bg-background text-slate-100 flex flex-col selection:bg-neon-cyan selection:text-black relative overflow-hidden">
       {/* Background Animated Ambient Lights */}
       <div className="fixed inset-0 pointer-events-none z-0">
-        <div className="absolute top-10 left-1/4 w-[500px] h-[500px] bg-neon-cyan/5 rounded-full blur-[140px]" />
-        <div className="absolute bottom-10 right-1/4 w-[500px] h-[500px] bg-neon-purple/5 rounded-full blur-[140px]" />
+        <div
+          className={`absolute top-10 left-1/4 w-[500px] h-[500px] rounded-full blur-[140px] transition-all duration-700 ${
+            settings.mode === 'piano' ? 'bg-neon-purple/10' : 'bg-neon-cyan/5'
+          }`}
+        />
+        <div
+          className={`absolute bottom-10 right-1/4 w-[500px] h-[500px] rounded-full blur-[140px] transition-all duration-700 ${
+            settings.mode === 'piano' ? 'bg-pink-600/10' : 'bg-neon-purple/5'
+          }`}
+        />
       </div>
 
       {/* Main Studio Header */}
       <Header
         isEnabled={settings.isEnabled}
+        mode={settings.mode}
+        onChangeMode={handleModeChange}
         onToggleEnabled={() => {
           const next = !settings.isEnabled;
           updateSettings({ isEnabled: next });
+          if (!next) {
+            setActivePianoNotes(new Set());
+            invoke('stop_all_piano_notes').catch(() => {});
+          }
           showToast(next ? 'KeyFX is now ACTIVE' : 'KeyFX is now MUTED', next ? 'success' : 'info');
         }}
         onOpenSettings={() => setIsSettingsOpen(true)}
@@ -304,48 +391,61 @@ export function App() {
 
       {/* Main Studio Body */}
       <main className="relative z-10 flex-1 max-w-6xl w-full mx-auto p-5 sm:p-6 space-y-6">
-        {/* Active Sound Showcase Hero */}
-        <SoundHero
-          currentSound={currentSound}
-          isEnabled={settings.isEnabled}
-          onTestSound={() => playSampleFeedback()}
-          onOpenTuning={() => setActiveTab('studio')}
-          isKeyActive={isKeyPulsing}
-        />
-
         {/* Tab Views with Animated Transitions */}
         <AnimatePresence mode="wait">
           {activeTab === 'studio' && (
             <motion.div
-              key="studio"
+              key={settings.mode === 'piano' ? 'piano-studio' : 'mech-studio'}
               initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -8 }}
               transition={{ duration: 0.18 }}
               className="space-y-6"
             >
-              {/* Interactive Visualizer Keyboard */}
-              <KeyVisualizer
-                externalKey={externalKey}
-                onTriggerVisualSound={() => playSampleFeedback()}
-              />
+              {settings.mode === 'piano' ? (
+                /* Dedicated Real Piano Mode Interface */
+                <PianoView
+                  pianoVolume={settings.pianoVolume}
+                  pianoOctave={settings.pianoOctave}
+                  pianoSustain={livePianoSustain}
+                  pianoPreset={settings.pianoPreset}
+                  activeNotes={activePianoNotes}
+                  onChangeSettings={updateSettings}
+                  onShowToast={showToast}
+                />
+              ) : (
+                /* Normal Mechanical Keyboard Studio View */
+                <>
+                  <SoundHero
+                    currentSound={currentSound}
+                    isEnabled={settings.isEnabled}
+                    onTestSound={() => playSampleFeedback()}
+                    onOpenTuning={() => setActiveTab('studio')}
+                    isKeyActive={isKeyPulsing}
+                  />
 
-              {/* Acoustic & Playback Tuning Console */}
-              <SoundTuning
-                settings={settings}
-                onChangeSettings={updateSettings}
-                onResetDefaults={() => {
-                  updateSettings({
-                    volume: DEFAULT_SETTINGS.volume,
-                    pitch: DEFAULT_SETTINGS.pitch,
-                    playbackSpeed: DEFAULT_SETTINGS.playbackSpeed,
-                    randomPitch: DEFAULT_SETTINGS.randomPitch,
-                    randomVolume: DEFAULT_SETTINGS.randomVolume,
-                    cooldownMs: DEFAULT_SETTINGS.cooldownMs,
-                  });
-                  showToast('Acoustic settings reset to defaults.', 'info');
-                }}
-              />
+                  <KeyVisualizer
+                    externalKey={externalKey}
+                    onTriggerVisualSound={() => playSampleFeedback()}
+                  />
+
+                  <SoundTuning
+                    settings={settings}
+                    onChangeSettings={updateSettings}
+                    onResetDefaults={() => {
+                      updateSettings({
+                        volume: DEFAULT_SETTINGS.volume,
+                        pitch: DEFAULT_SETTINGS.pitch,
+                        playbackSpeed: DEFAULT_SETTINGS.playbackSpeed,
+                        randomPitch: DEFAULT_SETTINGS.randomPitch,
+                        randomVolume: DEFAULT_SETTINGS.randomVolume,
+                        cooldownMs: DEFAULT_SETTINGS.cooldownMs,
+                      });
+                      showToast('Acoustic settings reset to defaults.', 'info');
+                    }}
+                  />
+                </>
+              )}
             </motion.div>
           )}
 

@@ -2,6 +2,10 @@ export type KeyboardScope = 'all_keys' | 'letters_only' | 'numbers_only' | 'lett
 
 export type SoundCategory = 'Mechanical' | 'Retro' | 'Digital' | 'Acoustic' | 'Soft' | 'Custom';
 
+export type AppMode = 'normal' | 'piano';
+
+export type PianoPreset = 'grand_piano' | 'bright_piano' | 'upright_piano' | 'electric_piano';
+
 export interface SoundProfile {
   id: string;
   name: string;
@@ -20,8 +24,17 @@ export interface AudioDeviceInfo {
   isDefault: boolean;
 }
 
+export interface PianoNoteEvent {
+  vk_code: number;
+  note_name: string;
+  note_full: string;
+  octave: number;
+  is_white: boolean;
+}
+
 export interface AppSettings {
   isEnabled: boolean;
+  mode: AppMode;
   selectedSoundId: string;
   volume: number; // 0 - 100
   pitch: number; // -12 to +12 semitones
@@ -34,5 +47,10 @@ export interface AppSettings {
   minimizeToTray: boolean;
   muteWhenFullscreen: boolean;
   outputDevice?: string;
-}
 
+  // Piano Mode Settings
+  pianoVolume: number; // 0 - 100
+  pianoOctave: number; // 1 - 7 (default 4)
+  pianoSustain: boolean;
+  pianoPreset: string;
+}

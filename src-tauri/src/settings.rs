@@ -2,6 +2,22 @@ use std::fs;
 use std::path::PathBuf;
 use serde::{Deserialize, Serialize};
 
+fn default_mode() -> String {
+    "normal".to_string()
+}
+
+fn default_piano_volume() -> f32 {
+    85.0
+}
+
+fn default_piano_octave() -> i32 {
+    4
+}
+
+fn default_piano_preset() -> String {
+    "grand_piano".to_string()
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AppConfig {
@@ -17,6 +33,16 @@ pub struct AppConfig {
     pub start_with_windows: bool,
     pub minimize_to_tray: bool,
     pub output_device: String,
+    #[serde(default = "default_mode")]
+    pub mode: String,
+    #[serde(default = "default_piano_volume")]
+    pub piano_volume: f32,
+    #[serde(default = "default_piano_octave")]
+    pub piano_octave: i32,
+    #[serde(default)]
+    pub piano_sustain: bool,
+    #[serde(default = "default_piano_preset")]
+    pub piano_preset: String,
 }
 
 impl Default for AppConfig {
@@ -34,10 +60,14 @@ impl Default for AppConfig {
             start_with_windows: false,
             minimize_to_tray: true,
             output_device: "default".to_string(),
+            mode: "normal".to_string(),
+            piano_volume: 85.0,
+            piano_octave: 4,
+            piano_sustain: false,
+            piano_preset: "grand_piano".to_string(),
         }
     }
 }
-
 
 fn get_config_path() -> PathBuf {
     let base = if let Ok(local_appdata) = std::env::var("LOCALAPPDATA") {

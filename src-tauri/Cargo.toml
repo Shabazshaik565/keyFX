@@ -1,6 +1,6 @@
 [package]
 name = "keyfx"
-version = "1.0.0"
+version = "2.0.0"
 description = "KeyFX - Native Windows Keyboard Sound Utility"
 authors = ["KeyFX Team"]
 edition = "2021"

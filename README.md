@@ -2,7 +2,7 @@
 
 <div align="center">
 
-![KeyFX Version](https://img.shields.io/badge/version-1.0.0-cyan.svg)
+![KeyFX Version](https://img.shields.io/badge/version-2.0.0-cyan.svg)
 ![Platform](https://img.shields.io/badge/platform-Windows%2010%20%2F%2011-blue.svg)
 ![Framework](https://img.shields.io/badge/framework-Tauri%20v2%20%7C%20React%2019-indigo.svg)
 ![Backend](https://img.shields.io/badge/backend-Rust-orange.svg)
@@ -25,6 +25,7 @@
 
 ## 🚀 Key Features
 
+* **🎹 Playable Real Piano Mode (NEW)**: Transform your computer keyboard into a polyphonic musical instrument. Play chords and melodies with physical modeling acoustic grand piano, studio upright, and Rhodes electric piano voices.
 * **⚡ Ultra-Low Latency (< 2ms)**: Audio plays on a dedicated worker thread with zero typing lag or input interference.
 * **🎧 In-App Audio Output Selector**: Choose to route sounds to **Computer Speakers**, **Bluetooth Headphones**, or the **Default Windows Output** directly inside Settings.
 * **🎵 Custom Audio Imports (WAV / MP3 / OGG)**: Import your own sound packs using the native Windows file picker. Stored locally in `%LOCALAPPDATA%\KeyFX\sounds\`.
@@ -36,6 +37,28 @@
   * **Minimize on Close (`X`)**: Window close hides to the system tray so audio playback continues uninterrupted.
   * **Autostart on Boot**: Automatically launches on Windows startup via Registry (`HKCU\...\Run`).
 * **🔒 Privacy-First Guarantee**: 100% offline. Zero telemetry, zero network requests, and never logs or stores typed characters.
+
+---
+
+## 🎹 Real Piano Mode
+
+KeyFX includes two switchable modes: **Normal Mode** (for mechanical keyboard acoustics across all Windows apps) and **Piano Mode** (to play music like a real piano).
+
+### Keyboard Mapping
+
+| Key Type | Computer Keys | Mapped Notes |
+| :--- | :--- | :--- |
+| **White Keys (Home Row)** | `A`, `S`, `D`, `F`, `G`, `H`, `J`, `K`, `L`, `;`, `'` | `C`, `D`, `E`, `F`, `G`, `A`, `B`, `C+1`, `D+1`, `E+1`, `F+1` |
+| **Black Keys (Top Row)** | `W`, `E`, `T`, `Y`, `U`, `O`, `P`, `[`, `]` | `C#`, `D#`, `F#`, `G#`, `A#`, `C#+1`, `D#+1`, `F#+1`, `G#+1` |
+| **Octave Shifting** | `Z` / `X` | Shift base octave Down / Up ($C1$ to $C7$) |
+| **Sustain Pedal** | `Spacebar` (or UI Toggle) | Hold damper open; release to damp vibrating strings |
+
+### Piano Engine Features
+* **Polyphony**: Play up to 32 simultaneous voices and chords without note choking.
+* **Acoustic Synthesis**: Inharmonic string partials ($f_n = n f_0 \sqrt{1 + B n^2}$), hammer felt transients, and dual-string unison beating.
+* **Anti-Auto-Repeat**: Windows keyboard repeat is cleanly filtered so held keys sustain naturally rather than repeatedly firing.
+* **Damper Fadeout**: Releasing a key smoothly damps the vibrating string over 90ms without audio cutoffs or clicks.
+* **Songbook Guide**: Built-in interactive cheat sheet with melodies like *Für Elise*, *Ode to Joy*, and *Twinkle Twinkle Little Star*.
 
 ---
 
