@@ -36,7 +36,7 @@ const SCOPES: ScopeOption[] = [
   {
     id: 'numbers_only',
     title: 'Numbers & Numpad Only',
-    description: 'Triggers exclusively on number row digits and 10-key numpad keys for accounting, finance, and data crunching.',
+    description: 'Triggers exclusively on number row digits and 10-key numpad keys for accounting, finance, and numeric data entry.',
     badge: 'Numeric Focus',
     keysPreview: '0, 1, 2, 3, 4, 5, 6, 7, 8, 9, NumPad...',
     iconText: '🔢',
@@ -53,7 +53,7 @@ const SCOPES: ScopeOption[] = [
     id: 'custom',
     title: 'Mute Modifiers (Gaming & Coding)',
     description: 'Smart filter that mutes fast modifier spamming (Ctrl, Alt, Shift, Win, Caps, F-keys) during gaming or intense IDE editing.',
-    badge: 'Dev / Gamer',
+    badge: 'Dev & Gamer',
     keysPreview: 'Exclude Ctrl, Alt, Win, Shift, CapsLock, F1-F12',
     iconText: '🎮',
   },
@@ -64,20 +64,22 @@ export const KeyboardScopeSelector: React.FC<KeyboardScopeProps> = ({
   onChangeScope,
 }) => {
   return (
-    <div className="glass-panel rounded-3xl p-6 sm:p-7 border border-white/10 space-y-6 shadow-2xl">
-      <div>
+    <div className="glass-panel rounded-2xl p-6 border border-white/[0.08] space-y-6 shadow-2xl">
+      {/* Header */}
+      <div className="border-b border-white/[0.06] pb-4">
         <h3 className="text-base font-extrabold text-white flex items-center gap-2.5">
           <Filter className="w-5 h-5 text-neon-cyan" />
-          Acoustic Trigger Scope Filters
-          <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-cyan-500/15 text-neon-cyan border border-cyan-500/30">
+          Acoustic Trigger Scope Matrix
+          <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-neon-cyan/15 text-neon-cyan border border-neon-cyan/30 font-mono">
             FILTER MATRIX
           </span>
         </h3>
         <p className="text-xs text-slate-400 mt-1">
-          Select which keyboard strokes should trigger acoustic feedback across Windows applications.
+          Control which keystrokes trigger acoustic feedback across Windows applications.
         </p>
       </div>
 
+      {/* Grid of Scope Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {SCOPES.map((scope) => {
           const isSelected = currentScope === scope.id;
@@ -88,8 +90,8 @@ export const KeyboardScopeSelector: React.FC<KeyboardScopeProps> = ({
               onClick={() => onChangeScope(scope.id)}
               className={`p-5 rounded-2xl border transition-all cursor-pointer flex flex-col justify-between ${
                 isSelected
-                  ? 'bg-gradient-to-br from-neon-cyan/15 via-[#121a2a] to-[#0c101a] border-neon-cyan/60 shadow-glow-cyan/20 ring-1 ring-neon-cyan/40 scale-[1.01]'
-                  : 'glass-card hover:bg-surfaceHover/80'
+                  ? 'bg-gradient-to-br from-neon-cyan/15 via-[#121A2A] to-[#0A0E18] border-neon-cyan/60 shadow-glow-cyan-sm ring-1 ring-neon-cyan/40 scale-[1.01]'
+                  : 'glass-card hover:border-white/[0.15]'
               }`}
             >
               <div>
@@ -99,10 +101,10 @@ export const KeyboardScopeSelector: React.FC<KeyboardScopeProps> = ({
                     {scope.title}
                   </span>
                   <span
-                    className={`text-[10px] font-extrabold px-2.5 py-0.5 rounded-full ${
+                    className={`text-[10px] font-bold px-2 py-0.5 rounded-md font-mono ${
                       isSelected
-                        ? 'bg-neon-cyan/20 text-neon-cyan border border-neon-cyan/40 shadow-glow-cyan/20'
-                        : 'bg-slate-800 text-slate-400'
+                        ? 'bg-neon-cyan/20 text-neon-cyan border border-neon-cyan/30'
+                        : 'bg-white/[0.06] text-slate-400'
                     }`}
                   >
                     {scope.badge}
@@ -112,12 +114,12 @@ export const KeyboardScopeSelector: React.FC<KeyboardScopeProps> = ({
                 <p className="text-xs text-slate-400 leading-relaxed">{scope.description}</p>
               </div>
 
-              <div className="mt-4 pt-3 border-t border-white/5 flex items-center justify-between text-[11px]">
+              <div className="mt-4 pt-3 border-t border-white/[0.06] flex items-center justify-between text-[11px]">
                 <code className="text-slate-400 font-mono text-[10px] truncate max-w-[240px]">
                   {scope.keysPreview}
                 </code>
                 {isSelected && (
-                  <span className="flex items-center gap-1 text-neon-cyan font-bold">
+                  <span className="flex items-center gap-1 text-neon-cyan font-bold font-mono text-xs">
                     <Check className="w-3.5 h-3.5" /> ACTIVE
                   </span>
                 )}

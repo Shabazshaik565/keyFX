@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
-import { Header } from './components/Header';
+import { Sidebar } from './components/Sidebar';
+import { TopBar } from './components/TopBar';
 import { SoundHero } from './components/SoundHero';
 import { SoundLibrary } from './components/SoundLibrary';
 import { SoundTuning } from './components/SoundTuning';
@@ -103,6 +104,7 @@ export function App() {
   });
 
   const [activeTab, setActiveTab] = useState<'studio' | 'library' | 'scope'>('studio');
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [toastMessage, setToastMessage] = useState<{ text: string; type: 'success' | 'info' | 'error' } | null>(null);
   const [externalKey, setExternalKey] = useState<{ label: string; id: number } | null>(null);
@@ -205,7 +207,7 @@ export function App() {
           setTimeout(() => setIsKeyPulsing(false), 140);
           setTotalKeystrokes((c) => c + 1);
 
-          // Calculate dynamic live WPM based on a rolling 5-second window
+          // Calculate dynamic live WPM based on rolling 5-second window
           strokeTimestampsRef.current.push(now);
           strokeTimestampsRef.current = strokeTimestampsRef.current.filter((t) => now - t <= 5000);
           const charsInWindow = strokeTimestampsRef.current.length;
@@ -253,7 +255,7 @@ export function App() {
 
     setupListeners();
 
-    // WPM cooldown decay timer
+    // WPM decay timer
     const interval = setInterval(() => {
       const now = Date.now();
       strokeTimestampsRef.current = strokeTimestampsRef.current.filter((t) => now - t <= 5000);
@@ -353,7 +355,7 @@ export function App() {
   };
 
   return (
-    <div className="min-h-screen bg-background text-slate-100 flex flex-col selection:bg-neon-cyan selection:text-black relative overflow-hidden">
+    <div className="h-screen w-screen bg-background text-slate-100 flex overflow-hidden selection:bg-neon-cyan selection:text-black">
       {/* Background Animated Ambient Lights */}
       <div className="fixed inset-0 pointer-events-none z-0">
         <div
@@ -368,11 +370,13 @@ export function App() {
         />
       </div>
 
-      {/* Main Studio Header */}
-      <Header
-        isEnabled={settings.isEnabled}
+      {/* Modern Desktop Application Sidebar */}
+      <Sidebar
+        currentTab={activeTab}
+        onChangeTab={setActiveTab}
         mode={settings.mode}
         onChangeMode={handleModeChange}
+        isEnabled={settings.isEnabled}
         onToggleEnabled={() => {
           const next = !settings.isEnabled;
           updateSettings({ isEnabled: next });
@@ -383,123 +387,156 @@ export function App() {
           showToast(next ? 'KeyFX is now ACTIVE' : 'KeyFX is now MUTED', next ? 'success' : 'info');
         }}
         onOpenSettings={() => setIsSettingsOpen(true)}
-        activeTab={activeTab}
-        setActiveTab={setActiveTab}
         liveWpm={liveWpm}
         totalKeystrokes={totalKeystrokes}
+        soundCount={sounds.length}
+        isCollapsed={isSidebarCollapsed}
+        onToggleCollapse={() => setIsSidebarCollapsed((prev) => !prev)}
       />
 
-      {/* Main Studio Body */}
-      <main className="relative z-10 flex-1 max-w-6xl w-full mx-auto p-5 sm:p-6 space-y-6">
-        {/* Tab Views with Animated Transitions */}
-        <AnimatePresence mode="wait">
-          {activeTab === 'studio' && (
-            <motion.div
-              key={settings.mode === 'piano' ? 'piano-studio' : 'mech-studio'}
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -8 }}
-              transition={{ duration: 0.18 }}
-              className="space-y-6"
-            >
-              {settings.mode === 'piano' ? (
-                /* Dedicated Real Piano Mode Interface */
-                <PianoView
-                  pianoVolume={settings.pianoVolume}
-                  pianoOctave={settings.pianoOctave}
-                  pianoSustain={livePianoSustain}
-                  pianoPreset={settings.pianoPreset}
-                  activeNotes={activePianoNotes}
-                  onChangeSettings={updateSettings}
-                  onShowToast={showToast}
-                />
-              ) : (
-                /* Normal Mechanical Keyboard Studio View */
-                <>
-                  <SoundHero
-                    currentSound={currentSound}
-                    isEnabled={settings.isEnabled}
-                    onTestSound={() => playSampleFeedback()}
-                    onOpenTuning={() => setActiveTab('studio')}
-                    isKeyActive={isKeyPulsing}
+      {/* Main Content Workspace Column */}
+      <div className="flex-1 flex flex-col h-screen overflow-hidden relative z-10">
+        {/* Desktop Application TopBar */}
+        <TopBar
+          mode={settings.mode}
+          currentTab={activeTab}
+          currentSound={currentSound}
+          pianoPreset={settings.pianoPreset}
+          isEnabled={settings.isEnabled}
+          onTestSound={() => playSampleFeedback()}
+          onOpenSettings={() => setIsSettingsOpen(true)}
+          onToggleEnabled={() => {
+            const next = !settings.isEnabled;
+            updateSettings({ isEnabled: next });
+            if (!next) {
+              setActivePianoNotes(new Set());
+              invoke('stop_all_piano_notes').catch(() => {});
+            }
+            showToast(next ? 'KeyFX is now ACTIVE' : 'KeyFX is now MUTED', next ? 'success' : 'info');
+          }}
+        />
+
+        {/* Scrollable View Area */}
+        <main className="flex-1 overflow-y-auto p-5 sm:p-6 lg:p-7">
+          <div className="max-w-6xl mx-auto space-y-6">
+            <AnimatePresence mode="wait">
+              {activeTab === 'studio' && (
+                <motion.div
+                  key={settings.mode === 'piano' ? 'piano-studio' : 'mech-studio'}
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -8 }}
+                  transition={{ duration: 0.18 }}
+                  className="space-y-6"
+                >
+                  {settings.mode === 'piano' ? (
+                    /* Dedicated Real Piano Mode Interface */
+                    <PianoView
+                      pianoVolume={settings.pianoVolume}
+                      pianoOctave={settings.pianoOctave}
+                      pianoSustain={livePianoSustain}
+                      pianoPreset={settings.pianoPreset}
+                      activeNotes={activePianoNotes}
+                      onChangeSettings={updateSettings}
+                      onShowToast={showToast}
+                    />
+                  ) : (
+                    /* Normal Mechanical Keyboard Studio View */
+                    <>
+                      <SoundHero
+                        currentSound={currentSound}
+                        isEnabled={settings.isEnabled}
+                        onTestSound={() => playSampleFeedback()}
+                        onOpenTuning={() => {
+                          const tuningEl = document.getElementById('sound-tuning-panel');
+                          if (tuningEl) {
+                            tuningEl.scrollIntoView({ behavior: 'smooth' });
+                          }
+                        }}
+                        onOpenLibrary={() => setActiveTab('library')}
+                        isKeyActive={isKeyPulsing}
+                      />
+
+                      <KeyVisualizer
+                        externalKey={externalKey}
+                        onTriggerVisualSound={() => playSampleFeedback()}
+                      />
+
+                      <div id="sound-tuning-panel">
+                        <SoundTuning
+                          settings={settings}
+                          onChangeSettings={updateSettings}
+                          onResetDefaults={() => {
+                            updateSettings({
+                              volume: DEFAULT_SETTINGS.volume,
+                              pitch: DEFAULT_SETTINGS.pitch,
+                              playbackSpeed: DEFAULT_SETTINGS.playbackSpeed,
+                              randomPitch: DEFAULT_SETTINGS.randomPitch,
+                              randomVolume: DEFAULT_SETTINGS.randomVolume,
+                              cooldownMs: DEFAULT_SETTINGS.cooldownMs,
+                            });
+                            showToast('Acoustic settings reset to defaults.', 'info');
+                          }}
+                        />
+                      </div>
+                    </>
+                  )}
+                </motion.div>
+              )}
+
+              {activeTab === 'library' && (
+                <motion.div
+                  key="library"
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -8 }}
+                  transition={{ duration: 0.18 }}
+                >
+                  <SoundLibrary
+                    sounds={sounds}
+                    selectedSoundId={settings.selectedSoundId}
+                    onSelectSound={(id) => {
+                      updateSettings({ selectedSoundId: id });
+                      const sound = sounds.find((s) => s.id === id);
+                      if (sound) showToast(`Selected: ${sound.name}`, 'success');
+                      playSampleFeedback(id);
+                    }}
+                    onPreviewSound={(id) => playSampleFeedback(id)}
+                    onImportSound={handleImportSound}
+                    onDeleteCustomSound={handleDeleteCustomSound}
+                  />
+                </motion.div>
+              )}
+
+              {activeTab === 'scope' && (
+                <motion.div
+                  key="scope"
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -8 }}
+                  transition={{ duration: 0.18 }}
+                  className="space-y-6"
+                >
+                  <KeyboardScopeSelector
+                    currentScope={settings.keyboardScope}
+                    onChangeScope={(scope) => {
+                      updateSettings({ keyboardScope: scope });
+                      showToast(`Scope set to: ${scope.replace('_', ' ').toUpperCase()}`, 'info');
+                    }}
                   />
 
                   <KeyVisualizer
                     externalKey={externalKey}
                     onTriggerVisualSound={() => playSampleFeedback()}
                   />
-
-                  <SoundTuning
-                    settings={settings}
-                    onChangeSettings={updateSettings}
-                    onResetDefaults={() => {
-                      updateSettings({
-                        volume: DEFAULT_SETTINGS.volume,
-                        pitch: DEFAULT_SETTINGS.pitch,
-                        playbackSpeed: DEFAULT_SETTINGS.playbackSpeed,
-                        randomPitch: DEFAULT_SETTINGS.randomPitch,
-                        randomVolume: DEFAULT_SETTINGS.randomVolume,
-                        cooldownMs: DEFAULT_SETTINGS.cooldownMs,
-                      });
-                      showToast('Acoustic settings reset to defaults.', 'info');
-                    }}
-                  />
-                </>
+                </motion.div>
               )}
-            </motion.div>
-          )}
+            </AnimatePresence>
+          </div>
+        </main>
+      </div>
 
-          {activeTab === 'library' && (
-            <motion.div
-              key="library"
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -8 }}
-              transition={{ duration: 0.18 }}
-            >
-              <SoundLibrary
-                sounds={sounds}
-                selectedSoundId={settings.selectedSoundId}
-                onSelectSound={(id) => {
-                  updateSettings({ selectedSoundId: id });
-                  const sound = sounds.find((s) => s.id === id);
-                  if (sound) showToast(`Selected: ${sound.name}`, 'success');
-                  playSampleFeedback(id);
-                }}
-                onPreviewSound={(id) => playSampleFeedback(id)}
-                onImportSound={handleImportSound}
-                onDeleteCustomSound={handleDeleteCustomSound}
-              />
-            </motion.div>
-          )}
-
-          {activeTab === 'scope' && (
-            <motion.div
-              key="scope"
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -8 }}
-              transition={{ duration: 0.18 }}
-              className="space-y-6"
-            >
-              <KeyboardScopeSelector
-                currentScope={settings.keyboardScope}
-                onChangeScope={(scope) => {
-                  updateSettings({ keyboardScope: scope });
-                  showToast(`Scope set to: ${scope.replace('_', ' ').toUpperCase()}`, 'info');
-                }}
-              />
-
-              <KeyVisualizer
-                externalKey={externalKey}
-                onTriggerVisualSound={() => playSampleFeedback()}
-              />
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </main>
-
-      {/* Settings Modal */}
+      {/* Settings Preferences Dialog */}
       <SettingsModal
         isOpen={isSettingsOpen}
         onClose={() => setIsSettingsOpen(false)}
@@ -515,7 +552,7 @@ export function App() {
               ? 'bg-rose-950/90 border-rose-500/40 text-rose-200 shadow-rose-950/80'
               : toastMessage.type === 'info'
               ? 'bg-blue-950/90 border-blue-500/40 text-blue-200 shadow-blue-950/80'
-              : 'bg-[#0f1828]/95 border-neon-cyan/50 text-neon-cyan shadow-cyan-950/90'
+              : 'bg-[#0F1828]/95 border-neon-cyan/50 text-neon-cyan shadow-cyan-950/90'
           }`}
         >
           {toastMessage.type === 'error' ? (
