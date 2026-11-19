@@ -21,7 +21,9 @@ interface PianoKeyDef {
   note: string;
   octaveOffset: number;
   isWhite: boolean;
-  shortcut: string;
+  baseWhiteNote?: string;
+  shortcut?: string;
+  midiOffset: number;
 }
 
 interface Full88Key {
@@ -35,31 +37,38 @@ interface Full88Key {
 
 const CHROMATIC_NOTES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
 
-// Focused 20-Key Performance Layout mapped to standard computer keyboard
-const FOCUSED_KEY_LAYOUT: PianoKeyDef[] = [
-  // Octave 0 (Base Octave)
-  { note: 'C', octaveOffset: 0, isWhite: true, shortcut: 'A' },
-  { note: 'C#', octaveOffset: 0, isWhite: false, shortcut: 'W' },
-  { note: 'D', octaveOffset: 0, isWhite: true, shortcut: 'S' },
-  { note: 'D#', octaveOffset: 0, isWhite: false, shortcut: 'E' },
-  { note: 'E', octaveOffset: 0, isWhite: true, shortcut: 'D' },
-  { note: 'F', octaveOffset: 0, isWhite: true, shortcut: 'F' },
-  { note: 'F#', octaveOffset: 0, isWhite: false, shortcut: 'T' },
-  { note: 'G', octaveOffset: 0, isWhite: true, shortcut: 'G' },
-  { note: 'G#', octaveOffset: 0, isWhite: false, shortcut: 'Y' },
-  { note: 'A', octaveOffset: 0, isWhite: true, shortcut: 'H' },
-  { note: 'A#', octaveOffset: 0, isWhite: false, shortcut: 'U' },
-  { note: 'B', octaveOffset: 0, isWhite: true, shortcut: 'J' },
+// 25-Key Full Pro Synthesizer Performance Deck (2 Complete Octaves: C to C)
+const PERFORMANCE_KEYS: PianoKeyDef[] = [
+  // --- Base Octave (Offset 0) ---
+  { note: 'C', octaveOffset: 0, isWhite: true, shortcut: 'A', midiOffset: 0 },
+  { note: 'C#', octaveOffset: 0, isWhite: false, baseWhiteNote: 'C', shortcut: 'W', midiOffset: 1 },
+  { note: 'D', octaveOffset: 0, isWhite: true, shortcut: 'S', midiOffset: 2 },
+  { note: 'D#', octaveOffset: 0, isWhite: false, baseWhiteNote: 'D', shortcut: 'E', midiOffset: 3 },
+  { note: 'E', octaveOffset: 0, isWhite: true, shortcut: 'D', midiOffset: 4 },
+  { note: 'F', octaveOffset: 0, isWhite: true, shortcut: 'F', midiOffset: 5 },
+  { note: 'F#', octaveOffset: 0, isWhite: false, baseWhiteNote: 'F', shortcut: 'T', midiOffset: 6 },
+  { note: 'G', octaveOffset: 0, isWhite: true, shortcut: 'G', midiOffset: 7 },
+  { note: 'G#', octaveOffset: 0, isWhite: false, baseWhiteNote: 'G', shortcut: 'Y', midiOffset: 8 },
+  { note: 'A', octaveOffset: 0, isWhite: true, shortcut: 'H', midiOffset: 9 },
+  { note: 'A#', octaveOffset: 0, isWhite: false, baseWhiteNote: 'A', shortcut: 'U', midiOffset: 10 },
+  { note: 'B', octaveOffset: 0, isWhite: true, shortcut: 'J', midiOffset: 11 },
 
-  // Octave 1 (Upper Octave)
-  { note: 'C', octaveOffset: 1, isWhite: true, shortcut: 'K' },
-  { note: 'C#', octaveOffset: 1, isWhite: false, shortcut: 'O' },
-  { note: 'D', octaveOffset: 1, isWhite: true, shortcut: 'L' },
-  { note: 'D#', octaveOffset: 1, isWhite: false, shortcut: 'P' },
-  { note: 'E', octaveOffset: 1, isWhite: true, shortcut: ';' },
-  { note: 'F', octaveOffset: 1, isWhite: true, shortcut: "'" },
-  { note: 'F#', octaveOffset: 1, isWhite: false, shortcut: '[' },
-  { note: 'G', octaveOffset: 1, isWhite: true, shortcut: ']' },
+  // --- Upper Octave (Offset 1) ---
+  { note: 'C', octaveOffset: 1, isWhite: true, shortcut: 'K', midiOffset: 12 },
+  { note: 'C#', octaveOffset: 1, isWhite: false, baseWhiteNote: 'C', shortcut: 'O', midiOffset: 13 },
+  { note: 'D', octaveOffset: 1, isWhite: true, shortcut: 'L', midiOffset: 14 },
+  { note: 'D#', octaveOffset: 1, isWhite: false, baseWhiteNote: 'D', shortcut: 'P', midiOffset: 15 },
+  { note: 'E', octaveOffset: 1, isWhite: true, shortcut: ';', midiOffset: 16 },
+  { note: 'F', octaveOffset: 1, isWhite: true, shortcut: "'", midiOffset: 17 },
+  { note: 'F#', octaveOffset: 1, isWhite: false, baseWhiteNote: 'F', shortcut: '[', midiOffset: 18 },
+  { note: 'G', octaveOffset: 1, isWhite: true, shortcut: '\\', midiOffset: 19 },
+  { note: 'G#', octaveOffset: 1, isWhite: false, baseWhiteNote: 'G', shortcut: ']', midiOffset: 20 },
+  { note: 'A', octaveOffset: 1, isWhite: true, midiOffset: 21 },
+  { note: 'A#', octaveOffset: 1, isWhite: false, baseWhiteNote: 'A', midiOffset: 22 },
+  { note: 'B', octaveOffset: 1, isWhite: true, midiOffset: 23 },
+
+  // --- Top Octave Cap (Offset 2) ---
+  { note: 'C', octaveOffset: 2, isWhite: true, midiOffset: 24 },
 ];
 
 const PRESETS = [
@@ -236,11 +245,18 @@ export const PianoView: React.FC<PianoViewProps> = ({
     onShowToast(next ? 'Sustain Pedal: LATCHED ON' : 'Sustain Pedal: RELEASED', next ? 'success' : 'info');
   };
 
-  const focusedWhiteKeys = FOCUSED_KEY_LAYOUT.filter((k) => k.isWhite);
+  const performanceWhiteKeys = useMemo(
+    () => PERFORMANCE_KEYS.filter((k) => k.isWhite),
+    []
+  );
+  const performanceBlackKeys = useMemo(
+    () => PERFORMANCE_KEYS.filter((k) => !k.isWhite),
+    []
+  );
 
-  // Compute active keyboard zone range on the full 88-key deck
+  // Compute active keyboard zone range on the full 88-key deck (15 white keys = 2 octaves)
   const startWhiteIndex = Math.max(0, 2 + (pianoOctave - 1) * 7);
-  const endWhiteIndex = Math.min(51, startWhiteIndex + 11);
+  const endWhiteIndex = Math.min(51, startWhiteIndex + 14);
   const bracketLeftPercent = (startWhiteIndex / 52) * 100;
   const bracketWidthPercent = ((endWhiteIndex - startWhiteIndex + 1) / 52) * 100;
 
@@ -423,7 +439,7 @@ export const PianoView: React.FC<PianoViewProps> = ({
               </span>
             </div>
             <span className="text-[10px] font-mono text-slate-400">
-              Active Zone: <span className="text-neon-cyan font-bold">C{pianoOctave} - G{pianoOctave + 1}</span>
+              Active Zone: <span className="text-neon-cyan font-bold">C{pianoOctave} - C{pianoOctave + 2}</span>
             </span>
           </div>
 
@@ -502,81 +518,127 @@ export const PianoView: React.FC<PianoViewProps> = ({
         </div>
       )}
 
-      {/* Focused 20-Key Performance Deck */}
+      {/* 25-Key Full Pro Synthesizer Performance Deck (Mapped to Computer Keyboard) */}
       {(viewMode === 'both' || viewMode === 'focused') && (
         <div className="glass-panel rounded-2xl p-5 border border-white/[0.08] shadow-2xl space-y-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-neon-purple" />
+              <span className="w-2.5 h-2.5 rounded-full bg-neon-purple shadow-glow-purple" />
               <span className="text-xs font-bold text-white tracking-wide uppercase font-mono">
-                Performance Synthesizer Deck (Mapped to Computer Keyboard)
+                Performance Synthesizer Deck (2-Octave Pro Deck • Mapped to Computer Keyboard)
               </span>
             </div>
-            <span className="text-[10px] text-slate-400 font-mono">
-              Type on your keyboard anywhere or click keys directly
-            </span>
+            <div className="flex items-center gap-3">
+              <span className="text-[10px] text-neon-cyan font-mono font-bold bg-neon-cyan/10 px-2.5 py-1 rounded-md border border-neon-cyan/30 shadow-glow-cyan-sm">
+                C{pianoOctave} - C{pianoOctave + 2}
+              </span>
+              <span className="hidden sm:inline text-[10px] text-slate-400 font-mono">
+                Type on physical keyboard or click keys directly
+              </span>
+            </div>
           </div>
 
-          {/* Focused Key Deck */}
-          <div className="relative rounded-xl bg-[#090D15] p-4 border border-white/[0.08] shadow-key-chassis overflow-x-auto">
-            <div className="relative flex min-w-[650px] justify-center h-36">
-              {/* White Keys */}
-              {focusedWhiteKeys.map((keyDef, idx) => {
-                const fullNote = `${keyDef.note}${pianoOctave + keyDef.octaveOffset}`;
+          {/* Synthesizer Deck Chassis */}
+          <div className="relative rounded-2xl overflow-hidden border border-white/[0.1] bg-[#07090F] shadow-2xl">
+            {/* Top Fallboard & Accent Trim */}
+            <div className="h-5 bg-gradient-to-b from-[#181E2E] via-[#0E1320] to-[#080B14] border-b border-black flex items-center justify-between px-4">
+              <div className="flex items-center gap-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-neon-cyan" />
+                <span className="text-[9px] uppercase tracking-widest font-mono font-bold text-slate-400">
+                  KeyFX Acoustic DSP Synthesizer
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-[9px] font-mono text-slate-400">
+                  Range: <strong className="text-white">Octave {pianoOctave} to {pianoOctave + 2}</strong>
+                </span>
+              </div>
+            </div>
+
+            {/* Red Damper Felt Strip */}
+            <div className="h-1.5 w-full bg-[#8B0000] shadow-inner" />
+
+            {/* Interactive Keys Stage */}
+            <div className="relative h-44 w-full select-none">
+              {/* White Keys Row (takes 100% width of the deck) */}
+              <div className="flex h-full w-full">
+                {performanceWhiteKeys.map((keyDef) => {
+                  const currentOctave = pianoOctave + keyDef.octaveOffset;
+                  const fullNote = `${keyDef.note}${currentOctave}`;
+                  const isActive = activeNotes.has(fullNote);
+                  const midiNote = 12 * (currentOctave + 1) + (keyDef.midiOffset % 12);
+
+                  return (
+                    <button
+                      key={fullNote}
+                      onMouseDown={() => handleDirectPlay(keyDef.note, currentOctave, midiNote)}
+                      onMouseUp={() => handleDirectRelease(midiNote)}
+                      onMouseLeave={() => handleDirectRelease(midiNote)}
+                      className={`relative flex-1 h-full border-r border-slate-300/40 rounded-b-xl flex flex-col justify-between items-center pb-3 pt-2 transition-all cursor-pointer select-none ${
+                        isActive
+                          ? 'bg-gradient-to-b from-neon-cyan via-cyan-200 to-white shadow-glow-cyan translate-y-1 z-10 ring-1 ring-cyan-300'
+                          : 'bg-gradient-to-b from-white via-slate-100 to-slate-200 hover:from-slate-50 hover:to-slate-300 shadow-sm'
+                      }`}
+                      title={`${fullNote}${keyDef.shortcut ? ` [Key: ${keyDef.shortcut}]` : ''}`}
+                    >
+                      <span className="text-[11px] font-mono font-bold text-slate-500">
+                        {fullNote}
+                      </span>
+                      {keyDef.shortcut ? (
+                        <span className="w-7 h-7 rounded-lg bg-[#0E1320] text-white font-mono font-black text-xs flex items-center justify-center shadow-md border border-white/[0.12]">
+                          {keyDef.shortcut}
+                        </span>
+                      ) : (
+                        <span className="w-1.5 h-1.5 rounded-full bg-slate-400/40 mb-2" />
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Black Keys (Positioned with 100% pixel-perfect accuracy) */}
+              {performanceBlackKeys.map((keyDef) => {
+                const currentOctave = pianoOctave + keyDef.octaveOffset;
+                const fullNote = `${keyDef.note}${currentOctave}`;
                 const isActive = activeNotes.has(fullNote);
+                const midiNote = 12 * (currentOctave + 1) + (keyDef.midiOffset % 12);
+
+                const whiteIndex = performanceWhiteKeys.findIndex(
+                  (w) => w.note === keyDef.baseWhiteNote && w.octaveOffset === keyDef.octaveOffset
+                );
+
+                const centerPercent = ((whiteIndex + 1) / performanceWhiteKeys.length) * 100;
+                // Black key is ~65% the width of a single white key
+                const keyWidthPercent = (1 / performanceWhiteKeys.length) * 100 * 0.65;
 
                 return (
                   <button
                     key={fullNote}
-                    onMouseDown={() => handleDirectPlay(keyDef.note, pianoOctave + keyDef.octaveOffset, 60 + idx)}
-                    onMouseUp={() => handleDirectRelease(60 + idx)}
-                    onMouseLeave={() => handleDirectRelease(60 + idx)}
-                    className={`relative flex-1 max-w-[48px] h-full rounded-b-xl border-r border-b border-l border-slate-300/40 flex flex-col justify-between items-center pb-2 pt-1 transition-all cursor-pointer select-none ${
+                    onMouseDown={() => handleDirectPlay(keyDef.note, currentOctave, midiNote)}
+                    onMouseUp={() => handleDirectRelease(midiNote)}
+                    onMouseLeave={() => handleDirectRelease(midiNote)}
+                    className={`absolute top-0 h-28 rounded-b-lg border-x border-b border-black flex flex-col justify-between items-center pb-2 pt-1.5 transition-all cursor-pointer z-20 select-none shadow-2xl ${
                       isActive
-                        ? 'bg-gradient-to-b from-neon-cyan via-cyan-200 to-white shadow-glow-cyan translate-y-1 z-10'
-                        : 'bg-gradient-to-b from-white via-slate-100 to-slate-200 hover:from-slate-100 hover:to-slate-300'
+                        ? 'bg-gradient-to-b from-neon-purple to-purple-400 shadow-glow-purple translate-y-1 ring-1 ring-purple-300'
+                        : 'bg-gradient-to-b from-[#222733] via-[#121622] to-black hover:bg-neutral-800'
                     }`}
+                    style={{
+                      left: `${centerPercent}%`,
+                      width: `${keyWidthPercent}%`,
+                      transform: 'translateX(-50%)',
+                    }}
+                    title={`${fullNote}${keyDef.shortcut ? ` [Key: ${keyDef.shortcut}]` : ''}`}
                   >
-                    <span className="text-[10px] font-mono font-bold text-slate-500">
+                    <span className="text-[10px] font-mono font-bold text-slate-300">
                       {fullNote}
                     </span>
-                    <span className="w-6 h-6 rounded-md bg-slate-900 text-white font-mono font-black text-xs flex items-center justify-center shadow-md">
-                      {keyDef.shortcut}
-                    </span>
-                  </button>
-                );
-              })}
-
-              {/* Black Keys */}
-              {FOCUSED_KEY_LAYOUT.filter((k) => !k.isWhite).map((keyDef) => {
-                const fullNote = `${keyDef.note}${pianoOctave + keyDef.octaveOffset}`;
-                const isActive = activeNotes.has(fullNote);
-
-                // Position relative to white key
-                const whiteIndex = focusedWhiteKeys.findIndex(
-                  (w) => w.note === keyDef.note.replace('#', '') && w.octaveOffset === keyDef.octaveOffset
-                );
-                const leftPercent = ((whiteIndex + 0.68) / focusedWhiteKeys.length) * 100;
-
-                return (
-                  <button
-                    key={fullNote}
-                    onMouseDown={() => handleDirectPlay(keyDef.note, pianoOctave + keyDef.octaveOffset, 80)}
-                    onMouseUp={() => handleDirectRelease(80)}
-                    onMouseLeave={() => handleDirectRelease(80)}
-                    className={`absolute top-0 h-22 w-[5.5%] rounded-b-lg border-x border-b border-black flex flex-col justify-between items-center pb-1.5 pt-1 transition-all cursor-pointer z-10 select-none ${
-                      isActive
-                        ? 'bg-gradient-to-b from-neon-purple to-purple-400 shadow-glow-purple translate-y-1'
-                        : 'bg-gradient-to-b from-[#181818] via-[#101010] to-black hover:bg-neutral-800'
-                    }`}
-                    style={{ left: `${leftPercent}%` }}
-                  >
-                    <span className="text-[9px] font-mono font-bold text-slate-300">
-                      {fullNote}
-                    </span>
-                    <span className="w-5 h-5 rounded bg-neon-purple/20 border border-neon-purple/40 text-neon-purple font-mono font-bold text-[10px] flex items-center justify-center">
-                      {keyDef.shortcut}
-                    </span>
+                    {keyDef.shortcut ? (
+                      <span className="w-6 h-6 rounded-md bg-neon-purple/20 border border-neon-purple/50 text-neon-purple font-mono font-black text-[11px] flex items-center justify-center shadow-inner">
+                        {keyDef.shortcut}
+                      </span>
+                    ) : (
+                      <span className="w-1.5 h-1.5 rounded-full bg-neon-purple/30 mb-1" />
+                    )}
                   </button>
                 );
               })}

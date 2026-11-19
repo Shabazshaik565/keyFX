@@ -164,6 +164,7 @@ pub fn map_vk_to_piano_note(vk: u32) -> Option<(&'static str, i32, bool)> {
         0x4C => Some(("D", 1, true)),   // L -> D (+1)
         0xBA => Some(("E", 1, true)),   // ; -> E (+1)
         0xDE => Some(("F", 1, true)),   // ' -> F (+1)
+        0xDC => Some(("G", 1, true)),   // \ -> G (+1)
 
         // Sharp / Flat Black Keys
         0x57 => Some(("C#", 0, false)), // W -> C#
