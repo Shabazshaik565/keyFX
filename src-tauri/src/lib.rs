@@ -173,6 +173,16 @@ fn sync_audio_tuning(
 }
 
 #[tauri::command]
+fn select_sound(sound_id: String) -> Result<String, String> {
+    audio::set_selected_sound(&sound_id);
+    audio::preview_sound_by_id(&sound_id);
+    let mut config = settings::load_config();
+    config.selected_sound_id = sound_id.clone();
+    let _ = settings::save_config(&config);
+    Ok(sound_id)
+}
+
+#[tauri::command]
 fn preview_sound(sound_id: String) -> Result<(), String> {
     audio::preview_sound_by_id(&sound_id);
     Ok(())
@@ -273,6 +283,7 @@ pub fn run() {
             set_keyboard_scope,
             set_cooldown_ms,
             sync_audio_tuning,
+            select_sound,
             preview_sound,
             trigger_test_sound,
             import_custom_sound,

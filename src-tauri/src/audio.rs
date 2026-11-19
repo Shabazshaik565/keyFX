@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::io::Cursor;
 use std::sync::{Arc, OnceLock, RwLock};
-use rodio::{Decoder, OutputStream, OutputStreamHandle, Sink};
+use rodio::{Decoder, OutputStream, OutputStreamHandle, Sink, Source};
 use rodio::cpal::traits::{DeviceTrait, HostTrait};
 use rodio::cpal;
 
@@ -38,9 +38,18 @@ impl Default for AudioSettings {
     }
 }
 
+/// High-performance linear PCM buffer for sub-millisecond audio playback with zero decoding overhead
+#[derive(Clone)]
+pub struct PredecodedSound {
+    pub pcm: Arc<Vec<f32>>,
+    pub sample_rate: u32,
+    pub channels: u16,
+}
+
 pub struct AudioEngine {
     stream_handle: OutputStreamHandle,
-    sound_cache: HashMap<String, Vec<u8>>,
+    pcm_cache: HashMap<String, PredecodedSound>,
+    raw_cache: HashMap<String, Vec<u8>>,
     settings: Arc<RwLock<AudioSettings>>,
 }
 
@@ -50,7 +59,6 @@ enum AudioWorkerMsg {
 
 static AUDIO_ENGINE: OnceLock<RwLock<AudioEngine>> = OnceLock::new();
 static AUDIO_WORKER_TX: OnceLock<std::sync::mpsc::Sender<AudioWorkerMsg>> = OnceLock::new();
-
 
 // Fast pseudo-random number generator for zero-allocation micro-variations
 fn fast_random() -> f32 {
@@ -62,36 +70,46 @@ fn fast_random() -> f32 {
     ((nanos % 1000) as f32) / 1000.0
 }
 
-// Generate high quality 16-bit 44.1kHz PCM WAV buffers in memory
-fn generate_wav_sample(generator: impl Fn(f32) -> f32, duration_secs: f32) -> Vec<u8> {
-    let spec = hound::WavSpec {
-        channels: 1,
-        sample_rate: 44100,
-        bits_per_sample: 16,
-        sample_format: hound::SampleFormat::Int,
-    };
+// Generate linear 44.1kHz floating point PCM buffers in memory directly without WAV overhead
+fn generate_pcm_sample(generator: impl Fn(f32) -> f32, duration_secs: f32) -> PredecodedSound {
+    let sample_rate = 44100;
+    let total_samples = (sample_rate as f32 * duration_secs) as usize;
+    let mut samples = Vec::with_capacity(total_samples);
 
-    let mut cursor = Cursor::new(Vec::new());
-    {
-        let mut writer = hound::WavWriter::new(&mut cursor, spec).expect("failed to create wav writer");
-        let total_samples = (44100.0 * duration_secs) as usize;
-
-        for i in 0..total_samples {
-            let t = (i as f32) / 44100.0;
-            let sample_f32 = generator(t).clamp(-1.0, 1.0);
-            let sample_i16 = (sample_f32 * 32767.0) as i16;
-            writer.write_sample(sample_i16).unwrap();
-        }
-        writer.finalize().unwrap();
+    for i in 0..total_samples {
+        let t = (i as f32) / (sample_rate as f32);
+        let sample = generator(t).clamp(-1.0, 1.0);
+        samples.push(sample);
     }
-    cursor.into_inner()
+
+    PredecodedSound {
+        pcm: Arc::new(samples),
+        sample_rate,
+        channels: 1,
+    }
 }
 
-fn create_built_in_sounds() -> HashMap<String, Vec<u8>> {
+pub fn decode_bytes_to_pcm(bytes: &[u8]) -> Option<PredecodedSound> {
+    let cursor = Cursor::new(bytes.to_vec());
+    if let Ok(decoder) = Decoder::new(cursor) {
+        let sample_rate = decoder.sample_rate();
+        let channels = decoder.channels();
+        let samples: Vec<f32> = decoder.convert_samples().collect();
+        Some(PredecodedSound {
+            pcm: Arc::new(samples),
+            sample_rate,
+            channels,
+        })
+    } else {
+        None
+    }
+}
+
+fn create_built_in_sounds() -> HashMap<String, PredecodedSound> {
     let mut sounds = HashMap::new();
 
     // 1. Mechanical Cherry MX Blue: High frequency tactile snap + crisp click
-    let cherry_blue = generate_wav_sample(
+    let cherry_blue = generate_pcm_sample(
         |t| {
             let env = (-t * 60.0).exp();
             let click = (2.0 * std::f32::consts::PI * 1800.0 * t).sin() * 0.7;
@@ -99,54 +117,52 @@ fn create_built_in_sounds() -> HashMap<String, Vec<u8>> {
             let thump = (2.0 * std::f32::consts::PI * 220.0 * t).sin() * 0.3 * (-t * 35.0).exp();
             (click + snap + thump) * env
         },
-        0.08,
+        0.09,
     );
     sounds.insert("mech_cherry_blue".to_string(), cherry_blue);
 
-    // 2. Mechanical Gateron Ink Black: Deep low-frequency dampened thock
-    let gateron_ink = generate_wav_sample(
+    // 2. Gateron Ink Black: Deep, muted, and dampened low-frequency thock
+    let gateron_ink = generate_pcm_sample(
         |t| {
-            let env = (-t * 38.0).exp();
-            let thock1 = (2.0 * std::f32::consts::PI * 160.0 * t).sin() * 0.8;
-            let thock2 = (2.0 * std::f32::consts::PI * 310.0 * t).sin() * 0.4;
-            let sub = (2.0 * std::f32::consts::PI * 85.0 * t).sin() * 0.5;
-            (thock1 + thock2 + sub) * env
+            let env = (-t * 40.0).exp();
+            let sub = (2.0 * std::f32::consts::PI * 115.0 * t).sin() * 0.85;
+            let body = (2.0 * std::f32::consts::PI * 280.0 * t).sin() * 0.45;
+            let tap = (2.0 * std::f32::consts::PI * 850.0 * t).sin() * 0.15 * (-t * 80.0).exp();
+            (sub + body + tap) * env
         },
-        0.12,
+        0.11,
     );
     sounds.insert("mech_gateron_ink".to_string(), gateron_ink);
 
-    // 3. Vintage 1930s Typewriter: Heavy striker hit with mechanical resonance
-    let typewriter = generate_wav_sample(
+    // 3. Vintage 1930s Typewriter: Heavy mechanical striker hit on metal roller
+    let typewriter = generate_pcm_sample(
         |t| {
-            let hit_env = (-t * 80.0).exp();
-            let res_env = (-t * 25.0).exp();
-            let hit = (2.0 * std::f32::consts::PI * 1250.0 * t).sin() * 0.6 * hit_env;
-            let body = (2.0 * std::f32::consts::PI * 380.0 * t).sin() * 0.4 * res_env;
-            let metal = (2.0 * std::f32::consts::PI * 2600.0 * t).sin() * 0.25 * res_env;
-            hit + body + metal
+            let env = (-t * 45.0).exp();
+            let metallic = (2.0 * std::f32::consts::PI * 1250.0 * t).sin() * 0.6;
+            let spring = (2.0 * std::f32::consts::PI * 2400.0 * t).sin() * 0.35 * (-t * 25.0).exp();
+            let strike = (2.0 * std::f32::consts::PI * 320.0 * t).sin() * 0.75;
+            (strike + metallic + spring) * env
         },
-        0.14,
+        0.12,
     );
     sounds.insert("typewriter_1930".to_string(), typewriter);
 
-    // 4. Cyber Deck Terminal Beep: Sci-Fi HUD synthesizer blip
-    let cyber_deck = generate_wav_sample(
+    // 4. Cyber Deck Terminal Beep: Futuristic sci-fi synthesizer blip
+    let cyber_beep = generate_pcm_sample(
         |t| {
-            let env = (-t * 40.0).exp();
-            let freq = 1200.0 * (-t * 20.0).exp() + 440.0;
-            let tone = (2.0 * std::f32::consts::PI * freq * t).sin() * 0.7;
-            let harm = (2.0 * std::f32::consts::PI * freq * 2.0 * t).sin() * 0.2;
-            (tone + harm) * env
+            let env = (-t * 25.0).exp();
+            let tone1 = (2.0 * std::f32::consts::PI * 880.0 * t).sin() * 0.6;
+            let tone2 = (2.0 * std::f32::consts::PI * 1760.0 * t).sin() * 0.3;
+            (tone1 + tone2) * env
         },
-        0.09,
+        0.10,
     );
-    sounds.insert("cyber_deck_beep".to_string(), cyber_deck);
+    sounds.insert("cyber_deck_beep".to_string(), cyber_beep);
 
-    // 5. Soft Bubble Pop: Gentle fluid bubble pop
-    let soft_bubble = generate_wav_sample(
+    // 5. Soft Bubble Pop: Gentle, non-fatiguing fluid pop
+    let soft_bubble = generate_pcm_sample(
         |t| {
-            let env = (-t * 45.0).exp();
+            let env = (-t * 55.0).exp();
             let freq = 450.0 + (t * 800.0);
             let pop = (2.0 * std::f32::consts::PI * freq * t).sin() * 0.8;
             pop * env
@@ -156,7 +172,7 @@ fn create_built_in_sounds() -> HashMap<String, Vec<u8>> {
     sounds.insert("soft_bubble_pop".to_string(), soft_bubble);
 
     // 6. Retro 8-Bit Arcade Blip: Square-wave retro arcade blip
-    let arcade_blip = generate_wav_sample(
+    let arcade_blip = generate_pcm_sample(
         |t| {
             let env = (-t * 35.0).exp();
             let freq = 680.0;
@@ -168,7 +184,7 @@ fn create_built_in_sounds() -> HashMap<String, Vec<u8>> {
     sounds.insert("arcade_8bit_blip".to_string(), arcade_blip);
 
     // 7. Heavy Tactile Impact: Resonant bottom-out brass/plate hit
-    let heavy_impact = generate_wav_sample(
+    let heavy_impact = generate_pcm_sample(
         |t| {
             let env = (-t * 50.0).exp();
             let hit = (2.0 * std::f32::consts::PI * 240.0 * t).sin() * 0.7;
@@ -258,7 +274,7 @@ pub fn init_audio_engine() {
 
         let (initial_stream, stream_handle) = stream_opt.take().unwrap();
         let mut _current_stream: Option<OutputStream> = Some(initial_stream);
-        let sound_cache = create_built_in_sounds();
+        let pcm_cache = create_built_in_sounds();
         let initial_settings = AudioSettings {
             is_enabled: config.is_enabled,
             volume: config.volume,
@@ -271,14 +287,15 @@ pub fn init_audio_engine() {
 
         let engine = AudioEngine {
             stream_handle: stream_handle.clone(),
-            sound_cache,
+            pcm_cache,
+            raw_cache: HashMap::new(),
             settings: Arc::new(RwLock::new(initial_settings)),
         };
 
         let stream_for_piano = stream_handle.clone();
         let _ = AUDIO_ENGINE.set(RwLock::new(engine));
         crate::piano_audio::init_piano_engine(stream_for_piano);
-        println!("[KeyFX Audio] Local low-latency audio engine initialized.");
+        println!("[KeyFX Audio] Local low-latency pre-decoded PCM audio engine initialized.");
 
         // Immediately load and register all saved custom sounds into the audio engine cache
         let _ = crate::custom_sounds::init_custom_sounds();
@@ -306,9 +323,16 @@ pub fn init_audio_engine() {
     });
 }
 
-
-
-
+pub fn set_selected_sound(sound_id: &str) {
+    if let Some(engine_lock) = AUDIO_ENGINE.get() {
+        if let Ok(engine) = engine_lock.read() {
+            if let Ok(mut settings) = engine.settings.write() {
+                settings.selected_sound_id = sound_id.to_string();
+                println!("[KeyFX Audio] Switched keyboard switch sound to: {}", sound_id);
+            }
+        }
+    }
+}
 
 pub fn update_audio_settings(
     is_enabled: bool,
@@ -335,9 +359,13 @@ pub fn update_audio_settings(
 }
 
 pub fn add_custom_sound(id: String, bytes: Vec<u8>) {
+    let decoded_opt = decode_bytes_to_pcm(&bytes);
     if let Some(engine_lock) = AUDIO_ENGINE.get() {
         if let Ok(mut engine) = engine_lock.write() {
-            engine.sound_cache.insert(id, bytes);
+            if let Some(pcm_sound) = decoded_opt {
+                engine.pcm_cache.insert(id.clone(), pcm_sound);
+            }
+            engine.raw_cache.insert(id, bytes);
         }
     }
 }
@@ -345,7 +373,8 @@ pub fn add_custom_sound(id: String, bytes: Vec<u8>) {
 pub fn remove_custom_sound(id: &str) {
     if let Some(engine_lock) = AUDIO_ENGINE.get() {
         if let Ok(mut engine) = engine_lock.write() {
-            engine.sound_cache.remove(id);
+            engine.pcm_cache.remove(id);
+            engine.raw_cache.remove(id);
         }
     }
 }
@@ -366,48 +395,47 @@ pub fn play_keystroke_sound(vk: u32) {
                     return;
                 }
 
-                let sound_id = settings.selected_sound_id.clone();
-                let wav_data_opt = if let Some(data) = engine.sound_cache.get(&sound_id) {
-                    Some(data.clone())
-                } else if let Some(disk_data) = crate::custom_sounds::get_sound_bytes(&sound_id) {
-                    Some(disk_data)
-                } else {
-                    None
-                };
+                let sound_id = &settings.selected_sound_id;
+                let sound_opt = engine
+                    .pcm_cache
+                    .get(sound_id)
+                    .or_else(|| engine.pcm_cache.get("mech_cherry_blue"));
+                if let Some(sound) = sound_opt {
+                    if let Ok(sink) = Sink::try_new(&engine.stream_handle) {
+                        let source = rodio::buffer::SamplesBuffer::new(
+                            sound.channels,
+                            sound.sample_rate,
+                            (*sound.pcm).clone(),
+                        );
 
-                if let Some(wav_data) = wav_data_opt {
-                    let cursor = Cursor::new(wav_data);
-                    if let Ok(source) = Decoder::new(cursor) {
-                        if let Ok(sink) = Sink::try_new(&engine.stream_handle) {
-                            // 1. Key-specific acoustic nuance (Spacebar deeper stabilizer, Backspace crisp pop, Enter solid latch)
-                            let key_pitch_mult = match vk {
-                                0x20 => 0.85, // Spacebar (deep stabilizer thump)
-                                0x08 => 1.12, // Backspace (crisp rebound click)
-                                0x0D => 0.94, // Enter (heavy accent click)
-                                _ => 1.0,
-                            };
+                        // 1. Key-specific acoustic nuance (Spacebar deeper stabilizer, Backspace crisp pop, Enter solid latch)
+                        let key_pitch_mult = match vk {
+                            0x20 => 0.85, // Spacebar (deep stabilizer thump)
+                            0x08 => 1.12, // Backspace (crisp rebound click)
+                            0x0D => 0.94, // Enter (heavy accent click)
+                            _ => 1.0,
+                        };
 
-                            let key_vol_mult = match vk {
-                                0x20 => 1.15, // Spacebar slightly louder body
-                                0x0D => 1.10, // Enter slightly louder accent
-                                _ => 1.0,
-                            };
+                        let key_vol_mult = match vk {
+                            0x20 => 1.15, // Spacebar slightly louder body
+                            0x0D => 1.10, // Enter slightly louder accent
+                            _ => 1.0,
+                        };
 
-                            // 2. Calculate volume with dynamic punch boost (up to 2.5x gain headroom)
-                            let vol_rand = (fast_random() - 0.5) * (settings.random_volume / 100.0);
-                            let base_vol = (settings.volume / 100.0) * 1.6 * key_vol_mult;
-                            let final_vol = (base_vol + vol_rand).clamp(0.0, 2.5);
-                            sink.set_volume(final_vol);
+                        // 2. Calculate volume with dynamic punch boost (up to 2.5x gain headroom)
+                        let vol_rand = (fast_random() - 0.5) * (settings.random_volume / 100.0);
+                        let base_vol = (settings.volume / 100.0) * 1.6 * key_vol_mult;
+                        let final_vol = (base_vol + vol_rand).clamp(0.0, 2.5);
+                        sink.set_volume(final_vol);
 
-                            // 3. Calculate pitch & speed modulation: 2^(pitch / 12)
-                            let pitch_rand = (fast_random() - 0.5) * (settings.random_pitch / 100.0);
-                            let semitone_factor = 2.0_f32.powf((settings.pitch / 12.0) + pitch_rand);
-                            let final_speed = (settings.playback_speed * semitone_factor * key_pitch_mult).clamp(0.2, 4.0);
-                            sink.set_speed(final_speed);
+                        // 3. Calculate pitch & speed modulation: 2^(pitch / 12)
+                        let pitch_rand = (fast_random() - 0.5) * (settings.random_pitch / 100.0);
+                        let semitone_factor = 2.0_f32.powf((settings.pitch / 12.0) + pitch_rand);
+                        let final_speed = (settings.playback_speed * semitone_factor * key_pitch_mult).clamp(0.2, 4.0);
+                        sink.set_speed(final_speed);
 
-                            sink.append(source);
-                            sink.detach(); // Detached non-blocking playback
-                        }
+                        sink.append(source);
+                        sink.detach(); // Detached sub-millisecond playback
                     }
                 }
             }
@@ -418,28 +446,24 @@ pub fn play_keystroke_sound(vk: u32) {
 pub fn preview_sound_by_id(sound_id: &str) {
     if let Some(engine_lock) = AUDIO_ENGINE.get() {
         if let Ok(engine) = engine_lock.read() {
-            let wav_data_opt = if let Some(data) = engine.sound_cache.get(sound_id) {
-                Some(data.clone())
-            } else if let Some(disk_data) = crate::custom_sounds::get_sound_bytes(sound_id) {
-                Some(disk_data)
-            } else {
-                None
-            };
-
-            if let Some(wav_data) = wav_data_opt {
-                let cursor = Cursor::new(wav_data);
-                if let Ok(source) = Decoder::new(cursor) {
-                    if let Ok(sink) = Sink::try_new(&engine.stream_handle) {
-                        if let Ok(settings) = engine.settings.read() {
-                            sink.set_volume(((settings.volume / 100.0) * 1.6).clamp(0.0, 2.5));
-                        }
-                        sink.append(source);
-                        sink.detach();
+            let sound_opt = engine
+                .pcm_cache
+                .get(sound_id)
+                .or_else(|| engine.pcm_cache.get("mech_cherry_blue"));
+            if let Some(sound) = sound_opt {
+                if let Ok(sink) = Sink::try_new(&engine.stream_handle) {
+                    let source = rodio::buffer::SamplesBuffer::new(
+                        sound.channels,
+                        sound.sample_rate,
+                        (*sound.pcm).clone(),
+                    );
+                    if let Ok(settings) = engine.settings.read() {
+                        sink.set_volume(((settings.volume / 100.0) * 1.6).clamp(0.0, 2.5));
                     }
+                    sink.append(source);
+                    sink.detach();
                 }
             }
         }
     }
 }
-
-

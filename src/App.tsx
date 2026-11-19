@@ -116,32 +116,55 @@ export function App() {
 
   const strokeTimestampsRef = useRef<number[]>([]);
 
-  // Sync settings with LocalStorage & Rust backend
+  // Sync settings with LocalStorage
   useEffect(() => {
     localStorage.setItem('keyfx_settings', JSON.stringify(settings));
-    try {
-      invoke('set_app_mode', { mode: settings.mode }).catch(() => {});
-      invoke('sync_audio_tuning', {
-        isEnabled: settings.isEnabled,
-        volume: settings.volume,
-        pitch: settings.pitch,
-        playbackSpeed: settings.playbackSpeed,
-        randomPitch: settings.randomPitch,
-        randomVolume: settings.randomVolume,
-        selectedSoundId: settings.selectedSoundId,
-      }).catch(() => {});
-      invoke('sync_piano_settings', {
-        volume: settings.pianoVolume,
-        octave: settings.pianoOctave,
-        sustain: settings.pianoSustain,
-        preset: settings.pianoPreset,
-      }).catch(() => {});
-      invoke('set_keyboard_scope', { scope: settings.keyboardScope }).catch(() => {});
-      invoke('set_cooldown_ms', { cooldownMs: settings.cooldownMs }).catch(() => {});
-    } catch {
-      // safe fallback
-    }
   }, [settings]);
+
+  // Granular Sync: Audio Acoustic Tuning
+  useEffect(() => {
+    invoke('sync_audio_tuning', {
+      isEnabled: settings.isEnabled,
+      volume: settings.volume,
+      pitch: settings.pitch,
+      playbackSpeed: settings.playbackSpeed,
+      randomPitch: settings.randomPitch,
+      randomVolume: settings.randomVolume,
+      selectedSoundId: settings.selectedSoundId,
+    }).catch(() => {});
+  }, [
+    settings.isEnabled,
+    settings.volume,
+    settings.pitch,
+    settings.playbackSpeed,
+    settings.randomPitch,
+    settings.randomVolume,
+  ]);
+
+  // Granular Sync: Piano Mode Engine Settings
+  useEffect(() => {
+    invoke('sync_piano_settings', {
+      volume: settings.pianoVolume,
+      octave: settings.pianoOctave,
+      sustain: settings.pianoSustain,
+      preset: settings.pianoPreset,
+    }).catch(() => {});
+  }, [
+    settings.pianoVolume,
+    settings.pianoOctave,
+    settings.pianoSustain,
+    settings.pianoPreset,
+  ]);
+
+  // Granular Sync: Keyboard Interception Scope
+  useEffect(() => {
+    invoke('set_keyboard_scope', { scope: settings.keyboardScope }).catch(() => {});
+  }, [settings.keyboardScope]);
+
+  // Granular Sync: Anti-Chatter Debounce Cooldown
+  useEffect(() => {
+    invoke('set_cooldown_ms', { cooldownMs: settings.cooldownMs }).catch(() => {});
+  }, [settings.cooldownMs]);
 
   // Load saved config & custom sounds from Rust backend on startup
   useEffect(() => {
@@ -323,6 +346,20 @@ export function App() {
   const currentSound =
     sounds.find((s) => s.id === settings.selectedSoundId) || sounds[0];
 
+  const handleSelectSound = (id: string) => {
+    // 1. Immediately switch audio engine sound and trigger zero-latency sample preview in native backend
+    try {
+      invoke('select_sound', { soundId: id }).catch(() => {});
+    } catch {}
+
+    // 2. Immediately update frontend state so UI cards highlight instantaneously
+    updateSettings({ selectedSoundId: id });
+
+    // 3. User confirmation toast
+    const sound = sounds.find((s) => s.id === id);
+    if (sound) showToast(`Selected: ${sound.name}`, 'success');
+  };
+
   const handleImportSound = async () => {
     try {
       const imported = await invoke<SoundProfile | null>('import_custom_sound');
@@ -331,9 +368,8 @@ export function App() {
       }
 
       setSounds((prev) => [imported, ...prev.filter((s) => s.id !== imported.id)]);
-      updateSettings({ selectedSoundId: imported.id });
+      handleSelectSound(imported.id);
       showToast(`Imported "${imported.name}" successfully!`, 'success');
-      playSampleFeedback(imported.id);
     } catch (err: any) {
       console.error('Import error:', err);
       showToast(`Import failed: ${err?.toString() || 'Invalid audio file'}`, 'error');
@@ -345,7 +381,7 @@ export function App() {
       await invoke('delete_custom_sound', { soundId: id });
       setSounds((prev) => prev.filter((s) => s.id !== id));
       if (settings.selectedSoundId === id) {
-        updateSettings({ selectedSoundId: INITIAL_SOUNDS[0].id });
+        handleSelectSound(INITIAL_SOUNDS[0].id);
       }
       showToast('Custom sound deleted.', 'info');
     } catch (err: any) {
@@ -445,6 +481,8 @@ export function App() {
                     <>
                       <SoundHero
                         currentSound={currentSound}
+                        sounds={sounds}
+                        onSelectSound={handleSelectSound}
                         isEnabled={settings.isEnabled}
                         onTestSound={() => playSampleFeedback()}
                         onOpenTuning={() => {
@@ -495,12 +533,7 @@ export function App() {
                   <SoundLibrary
                     sounds={sounds}
                     selectedSoundId={settings.selectedSoundId}
-                    onSelectSound={(id) => {
-                      updateSettings({ selectedSoundId: id });
-                      const sound = sounds.find((s) => s.id === id);
-                      if (sound) showToast(`Selected: ${sound.name}`, 'success');
-                      playSampleFeedback(id);
-                    }}
+                    onSelectSound={handleSelectSound}
                     onPreviewSound={(id) => playSampleFeedback(id)}
                     onImportSound={handleImportSound}
                     onDeleteCustomSound={handleDeleteCustomSound}

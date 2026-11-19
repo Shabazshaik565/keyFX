@@ -5,6 +5,8 @@ import { SoundProfile } from '../types';
 
 interface SoundHeroProps {
   currentSound: SoundProfile;
+  sounds?: SoundProfile[];
+  onSelectSound?: (id: string) => void;
   isEnabled: boolean;
   onTestSound: () => void;
   onOpenTuning: () => void;
@@ -14,6 +16,8 @@ interface SoundHeroProps {
 
 export const SoundHero: React.FC<SoundHeroProps> = ({
   currentSound,
+  sounds,
+  onSelectSound,
   isEnabled,
   onTestSound,
   onOpenTuning,
@@ -83,9 +87,26 @@ export const SoundHero: React.FC<SoundHeroProps> = ({
               )}
             </div>
 
-            <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight flex items-center gap-2">
-              {currentSound.name}
-            </h2>
+            <div className="flex items-center gap-3 flex-wrap">
+              <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight">
+                {currentSound.name}
+              </h2>
+
+              {sounds && onSelectSound && (
+                <select
+                  value={currentSound.id}
+                  onChange={(e) => onSelectSound(e.target.value)}
+                  className="bg-[#0C111E] hover:bg-[#131A2B] border border-white/[0.12] hover:border-neon-cyan/50 text-xs font-semibold text-slate-200 rounded-lg px-2.5 py-1 outline-none transition-all cursor-pointer shadow-inner"
+                  title="Quick switch active sound profile"
+                >
+                  {sounds.map((s) => (
+                    <option key={s.id} value={s.id} className="bg-[#0C111E] text-white">
+                      {s.name} ({s.category})
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
             <p className="text-xs text-slate-400 max-w-xl line-clamp-1 leading-relaxed">
               {currentSound.description}
             </p>

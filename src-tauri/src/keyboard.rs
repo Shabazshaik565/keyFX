@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicIsize, Ordering};
 use std::sync::{OnceLock, RwLock};
 use std::time::{Duration, Instant};
@@ -38,6 +38,7 @@ pub struct KeyboardHookState {
     pub scope: String,
     pub cooldown_ms: u64,
     pub last_press: Instant,
+    pub last_press_map: HashMap<u32, Instant>,
     pub app_handle: Option<AppHandle>,
     pub pressed_keys: HashSet<u32>,
     pub piano_octave: i32,
@@ -55,6 +56,7 @@ pub fn init_state(app_handle: AppHandle) {
         scope: config.keyboard_scope,
         cooldown_ms: config.cooldown_ms,
         last_press: Instant::now(),
+        last_press_map: HashMap::new(),
         app_handle: Some(app_handle),
         pressed_keys: HashSet::new(),
         piano_octave: config.piano_octave,
@@ -296,10 +298,15 @@ unsafe extern "system" fn low_level_keyboard_proc(
                             // ==================== NORMAL MODE ====================
                             if is_down {
                                 let now = Instant::now();
-                                let elapsed = now.duration_since(state.last_press);
+                                // Per-key anti-chatter debounce: only debounce the same physical switch keycode
+                                let elapsed = state
+                                    .last_press_map
+                                    .get(&vk)
+                                    .map(|t| now.duration_since(*t))
+                                    .unwrap_or(Duration::from_secs(60));
 
-                                // Respect configured keystroke cooldown
-                                if elapsed >= Duration::from_millis(state.cooldown_ms) {
+                                let min_cooldown = state.cooldown_ms.min(100);
+                                if elapsed >= Duration::from_millis(min_cooldown) {
                                     let is_letter = (0x41..=0x5A).contains(&vk);
                                     let is_number = (0x30..=0x39).contains(&vk) || (0x60..=0x69).contains(&vk);
                                     let is_typing_common = matches!(vk, 0x20 | 0x08 | 0x0D | 0x09);
@@ -314,10 +321,11 @@ unsafe extern "system" fn low_level_keyboard_proc(
                                     };
 
                                     if allow_trigger {
+                                        state.last_press_map.insert(vk, now);
                                         state.last_press = now;
                                         let key_label = get_key_label(vk);
 
-                                        // Trigger ultra-low latency native audio with physical key character
+                                        // Trigger sub-millisecond native audio from pre-decoded PCM
                                         crate::audio::play_keystroke_sound(vk);
 
                                         if let Some(app) = &state.app_handle {
@@ -333,6 +341,9 @@ unsafe extern "system" fn low_level_keyboard_proc(
                                         }
                                     }
                                 }
+                            } else if is_up {
+                                // Allow instant re-press once physical switch is released
+                                state.last_press_map.remove(&vk);
                             }
                         }
                     }
